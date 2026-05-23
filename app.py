@@ -6,16 +6,47 @@ import plotly.express as px
 from datetime import datetime
 from sklearn.ensemble import IsolationForest
 from streamlit_autorefresh import st_autorefresh
+import numpy as np
 
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=2000, key="refresh")
 
-# ================= PAGE CONFIG ==========
+# ================= PAGE CONFIG =================
+st.set_page_config(
+    page_title="SentinelAI SOC Dashboard",
+    layout="wide"
+)
 
+# ================= CUSTOM CSS =================
+st.markdown("""
+<style>
 
+body {
+    background-color: #0f172a;
+}
 
-# =======
-st.set_page_config(page_title="SOC AI Network Dashboard", layout="wide")
+[data-testid="stAppViewContainer"] {
+    background-color: #0f172a;
+    color: white;
+}
+
+[data-testid="stSidebar"] {
+    background-color: #111827;
+}
+
+h1, h2, h3, h4 {
+    color: white;
+}
+
+div[data-testid="metric-container"] {
+    background-color: #111827;
+    border: 1px solid #1f2937;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # ================= LOGIN SYSTEM =================
 USER = "admin"
@@ -81,35 +112,49 @@ CREATE TABLE IF NOT EXISTS logs (
     upload REAL,
     download REAL,
     total REAL,
-    status TEXT
+    status TEXT,
+    threat_score INTEGER
 )
 """)
+
 conn.commit()
 
 # ================= SESSION STATE =================
 if "model" not in st.session_state:
-    st.session_state.model = IsolationForest(contamination=0.05)
+    st.session_state.model = IsolationForest(
+        contamination=0.05,
+        random_state=42
+    )
+
     st.session_state.data = []
     st.session_state.upload = []
     st.session_state.download = []
+
     st.session_state.prev_sent = 0
     st.session_state.prev_recv = 0
+
     st.session_state.trained = False
     st.session_state.simulate = False
 
 # ================= HEADER =================
-st.title("🛡 SOC AI Network Security Dashboard")
-st.markdown("Real-time monitoring • AI anomaly detection • App intelligence")
+st.title("🛡 SentinelAI - SOC Security Dashboard")
+st.markdown(
+    "Real-time AI threat detection • Network analytics • Security intelligence"
+)
 
 # ================= SIDEBAR =================
-st.sidebar.header("💻 System Info")
-st.sidebar.write(f"CPU: {psutil.cpu_percent()}%")
-st.sidebar.write(f"RAM: {psutil.virtual_memory().percent}%")
+st.sidebar.header("💻 System Information")
+
+cpu_usage = psutil.cpu_percent()
+ram_usage = psutil.virtual_memory().percent
+
+st.sidebar.write(f"CPU Usage: {cpu_usage}%")
+st.sidebar.write(f"RAM Usage: {ram_usage}%")
 
 if st.sidebar.button("🚨 Simulate Attack"):
     st.session_state.simulate = not st.session_state.simulate
 
-# ================= NETWORK =================
+# ================= NETWORK MONITORING =================
 net = psutil.net_io_counters()
 
 if st.session_state.prev_sent == 0:
@@ -122,6 +167,7 @@ download = (net.bytes_recv - st.session_state.prev_recv) / 1024
 st.session_state.prev_sent = net.bytes_sent
 st.session_state.prev_recv = net.bytes_recv
 
+# ================= ATTACK SIMULATION =================
 if st.session_state.simulate:
     upload *= 5
     download *= 5
@@ -130,25 +176,40 @@ total = upload + download
 
 # ================= STORE DATA =================
 st.session_state.data.append([upload, download, total])
+
 st.session_state.upload.append(upload)
 st.session_state.download.append(download)
 
-for arr in [st.session_state.data, st.session_state.upload, st.session_state.download]:
-    if len(arr) > 80:
+for arr in [
+    st.session_state.data,
+    st.session_state.upload,
+    st.session_state.download
+]:
+    if len(arr) > 100:
         arr.pop(0)
 
 # ================= AI MODEL =================
-if len(st.session_state.data) > 25:
+if len(st.session_state.data) > 30:
+
+    df = pd.DataFrame(
+        st.session_state.data,
+        columns=["upload", "download", "total"]
+    )
+
     if not st.session_state.trained:
-        st.session_state.model.fit(st.session_state.data)
+        st.session_state.model.fit(df)
         st.session_state.trained = True
 
-    pred = st.session_state.model.predict(st.session_state.data)
-    anomaly = pred[-1] == -1
+    predictions = st.session_state.model.predict(df)
+
+    latest_prediction = predictions[-1]
+
+    anomaly = latest_prediction == -1
+
 else:
     anomaly = False
 
-# ================= ATTACK CLASSIFICATION =================
+# ================= THREAT CLASSIFICATION =================
 if st.session_state.simulate:
     threat = "🚨 CRITICAL - Simulated Attack"
 
@@ -164,49 +225,81 @@ elif total > 100:
 else:
     threat = "🟢 Normal"
 
-# ================= LOG TO DATABASE =================
+# ================= THREAT SCORE =================
+if "CRITICAL" in threat:
+    threat_score = 95
+
+elif "DDoS" in threat:
+    threat_score = 85
+
+elif anomaly:
+    threat_score = 70
+
+elif total > 100:
+    threat_score = 45
+
+else:
+    threat_score = 10
+
+# ================= DATABASE LOGGING =================
 cursor.execute("""
-INSERT INTO logs (time, upload, download, total, status)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO logs (
+    time,
+    upload,
+    download,
+    total,
+    status,
+    threat_score
+)
+VALUES (?, ?, ?, ?, ?, ?)
 """, (
     datetime.now().strftime("%H:%M:%S"),
     upload,
     download,
     total,
-    threat
+    threat,
+    threat_score
 ))
+
 conn.commit()
 
 # ================= METRICS =================
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 col1.metric("⬆ Upload KB/s", f"{upload:.2f}")
 col2.metric("⬇ Download KB/s", f"{download:.2f}")
 col3.metric("⚡ Total KB/s", f"{total:.2f}")
-col4.metric("🚨 Threat Level", threat)
+col4.metric("🚨 Threat", threat)
+col5.metric("🧠 Threat Score", f"{threat_score}/100")
 
-# ================= ALERT SYSTEM =================
-st.subheader("🚨 Alerts")
+# ================= ALERTS =================
+st.subheader("🚨 Security Alerts")
 
 if "CRITICAL" in threat or "DDoS" in threat:
     st.error(f"ALERT: {threat}")
 
-elif "Suspicious" in threat:
+elif anomaly:
     st.warning(f"Warning: {threat}")
 
 else:
-    st.success("No active threats detected.")
+    st.success("System operating normally.")
 
-# ================= AI INSIGHT =================
-st.subheader("🧠 AI Insight")
+# ================= AI INSIGHTS =================
+st.subheader("🧠 AI Insights")
 
 if anomaly:
-    st.error(f"⚠️ Anomaly detected! Traffic spike at {total:.2f} KB/s")
-else:
-    st.success("Traffic is within normal behavioral range.")
+    st.error(
+        f"Anomaly detected in traffic pattern. "
+        f"Traffic reached {total:.2f} KB/s"
+    )
 
-# ================= GRAPH =================
-st.subheader("📈 Network Trend")
+else:
+    st.success(
+        "AI model indicates normal network behavior."
+    )
+
+# ================= NETWORK GRAPH =================
+st.subheader("📈 Real-Time Network Analytics")
 
 df_graph = pd.DataFrame({
     "Upload": st.session_state.upload,
@@ -216,38 +309,68 @@ df_graph = pd.DataFrame({
 
 st.line_chart(df_graph)
 
-# ================= PIE CHART =================
+# ================= TRAFFIC DISTRIBUTION =================
 st.subheader("📊 Traffic Distribution")
 
 df_pie = pd.DataFrame({
     "Type": ["Upload", "Download"],
-    "Value": [sum(st.session_state.upload), sum(st.session_state.download)]
+    "Value": [
+        sum(st.session_state.upload),
+        sum(st.session_state.download)
+    ]
 })
 
-fig = px.pie(df_pie, names="Type", values="Value")
+fig = px.pie(
+    df_pie,
+    names="Type",
+    values="Value",
+    title="Upload vs Download Traffic"
+)
+
 st.plotly_chart(fig, use_container_width=True)
 
 # ================= STATISTICS =================
-st.subheader("📊 Statistics")
+st.subheader("📊 Traffic Statistics")
 
-avg_traffic = sum([x[2] for x in st.session_state.data]) / len(st.session_state.data)
-max_traffic = max([x[2] for x in st.session_state.data])
+avg_traffic = np.mean([x[2] for x in st.session_state.data])
+max_traffic = np.max([x[2] for x in st.session_state.data])
 
 col1, col2 = st.columns(2)
-col1.metric("Average Traffic", f"{avg_traffic:.2f} KB/s")
-col2.metric("Peak Traffic", f"{max_traffic:.2f} KB/s")
+
+col1.metric(
+    "Average Traffic",
+    f"{avg_traffic:.2f} KB/s"
+)
+
+col2.metric(
+    "Peak Traffic",
+    f"{max_traffic:.2f} KB/s"
+)
 
 # ================= SECURITY LOGS =================
 st.subheader("📜 Security Logs")
 
 cursor.execute("""
-SELECT time, upload, download, total, status 
-FROM logs ORDER BY id DESC LIMIT 20
+SELECT time, upload, download, total, status, threat_score
+FROM logs
+ORDER BY id DESC
+LIMIT 20
 """)
 
 logs = cursor.fetchall()
 
-log_df = pd.DataFrame(logs, columns=["Time", "Upload", "Download", "Total", "Status"])
+log_df = pd.DataFrame(
+    logs,
+    columns=[
+        "Time",
+        "Upload",
+        "Download",
+        "Total",
+        "Status",
+        "Threat Score"
+    ]
+)
+
 st.dataframe(log_df, use_container_width=True)
 
 # ================= DOWNLOAD LOGS =================
@@ -256,6 +379,13 @@ st.subheader("📥 Export Logs")
 st.download_button(
     label="Download Logs as CSV",
     data=log_df.to_csv(index=False),
-    file_name="network_logs.csv",
+    file_name="security_logs.csv",
     mime="text/csv"
+)
+
+# ================= FOOTER =================
+st.markdown("---")
+
+st.markdown(
+    "🛡 SentinelAI • AI-Powered Cybersecurity Monitoring Platform"
 )
