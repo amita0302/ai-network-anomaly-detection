@@ -10,7 +10,11 @@ from streamlit_autorefresh import st_autorefresh
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=2000, key="refresh")
 
-# ================= PAGE CONFIG =================
+# ================= PAGE CONFIG ==========
+
+
+
+# =======
 st.set_page_config(page_title="SOC AI Network Dashboard", layout="wide")
 
 # ================= LOGIN SYSTEM =================
