@@ -12,3 +12,4 @@ altair==6.0.0
 pillow==12.2.0
 psutil==7.2.2
 joblib==1.5.3
+streamlit-autorefresh==1.0.1
