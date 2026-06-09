@@ -1,4 +1,4 @@
-🚨 AI Network Anomaly Detection System
+🚨 Sentiinel-AI
 
 An intelligent SOC (Security Operations Center) dashboard that monitors system and network activity in real-time and detects anomalies using data analysis and visualization techniques.
 
