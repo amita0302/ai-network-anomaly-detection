@@ -114,6 +114,24 @@ http://localhost:8501
 
 ---
 
+## 🌐 Deployment
+
+SentinelAI is deployed and live on **Streamlit Cloud**.
+
+🔴 **Live Demo:** https://sentinelai-network-monitor.streamlit.app
+
+### 🚀 How it was deployed:
+1. Pushed project to GitHub — `github.com/amita0302/ai-network-anomaly-detection`
+2. Logged into [Streamlit Cloud](https://streamlit.io/cloud) using GitHub account
+3. Selected repository and set `app.py` as the main entry point
+4. Streamlit Cloud auto-installed all dependencies from `requirements.txt`
+5. App went live instantly with a public shareable URL
+
+### 📋 Requirements for deployment:
+- `requirements.txt` must list all dependencies
+- `app.py` must be the entry point
+- All imports must be cloud-environment compatible
+
 🙌 Contribution
 
 Contributions are welcome!
