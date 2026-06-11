@@ -1,6 +1,7 @@
 from sklearn.ensemble import IsolationForest
 import numpy as np
 
+
 # Training data (normal system behavior)
 training_data = np.array([
     [30, 40],
